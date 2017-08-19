@@ -8,6 +8,7 @@ Installation nodes for Mac OS Sierra
 * nodemcu_uploader: sudo easy_install nodemcu-uploader
 
 Upload files to NodeMCU
+* nodemcu-uploader upload herms.lua
 
 Connect to NodeMCU
 * screen /dev/cu.SLAB_USBtoUART 115200
