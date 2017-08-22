@@ -142,24 +142,27 @@ function hltControll()
         -- after 750ms read out the temperatures
         tmr.create():alarm(750, tmr.ALARM_SINGLE, function()
             local actual_hlt = readTemp(addrT_hlt)
+            local actual_coil =  readTemp(addrT_coil)
 
             -- controll the heating element
             local delta = setValue_hlt - actual_hlt
             if delta > 2.0 then
                 heater(3)
-            elseif delta > 0.5 then
+            elseif delta > 1.0 then
                 heater(2)
+            elseif delta > 0.5 then
+                heater(1)
             elseif delta > 0.0 then
-                if (hlt_power > 1) then   -- hysterese: we reduce heating, when "commming up"
+                if (hlt_power >= 1) then   -- hysterese: we reduce heating, when "commming up"
                     heater(1)
                 end
             else
                 heater(0)
             end
 
-            print(count, string.format(
-                'set: %.1f°C\tHLT: %.1f°C\tCoil: %.1f°C\tpower: %d\tMT: %.1f°C', 
-                setValue_hlt, actual_hlt, readTemp(addrT_coil), hlt_power, readTemp(addrT_mt)
+            print(string.format(
+                '%.1f\tset: %.1f°C\tHLT: %.1f°C\tCoil: %.1f°C (%.1f)\tpower: %d\tMT: %.1f°C', 
+                count, setValue_hlt, actual_hlt, actual_coil, actual_coil-actual_hlt, hlt_power, readTemp(addrT_mt)
             ))
             count = count + 0.1
 
