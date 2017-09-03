@@ -1,35 +1,46 @@
 -- configure gpio
-ledPin=4
+local ledPin=4
 gpio.mode(ledPin,gpio.OUTPUT)
 
 -- register timers
-blinker = tmr.create()
-wifiStarter = tmr.create()
+local blinker = tmr.create()
 
 -- connect to wifi
+-- configure WIFIs (up to 5) and save to flash as follows:
+-- wifi.sta.config{ssid='your Wifi SSID', pwd='your password', save=true}
 wifi.setmode(wifi.STATION)
--- wifi.sta.config{
---     ssid="********",
---     pwd="********"
--- }
-
-
-function led(state)
-    gpio.write(ledPin, state)
-end
+wifi.sta.setip{
+  ip = "192.168.0.6",
+  netmask = "255.255.255.0",
+  gateway = "192.168.0.1"
+}
+wifi.eventmon.register(wifi.eventmon.STA_CONNECTED, function(args)
+    print("wifi.eventmon: connected to WiFi: " .. args.SSID, "channel: " .. args.channel)
+end)
+wifi.eventmon.register(wifi.eventmon.STA_GOT_IP, function(args)
+    print("wifi.eventmon: got IP: " .. args.IP, "netmask: " .. args.netmask,  "gateway: " .. args.gateway)
+    blinker:interval(2000)
+end)
+wifi.eventmon.register(wifi.eventmon.STA_DHCP_TIMEOUT, function()
+    print("wifi.eventmon: DHCP has timed out")
+end)
+wifi.eventmon.register(wifi.eventmon.STA_DISCONNECTED, function(args)
+    print("wifi.eventmon: STA - DISCONNECTED SSID: " .. args.SSID, "reason: " .. args.reason)
+end)
 
 local function nodeInfo()
     local majorVer, minorVer, devVer, _, _, flashSize = node.info()
     print("\nNodeMCU", majorVer.."."..minorVer.."."..devVer)
     print("Flashsize:", flashSize.." kBytes")
     print("Heapsize:", node.heap().." bytes")
+    print("Mem used:", collectgarbage('count')*1024)
 end
 
 local function fsInfo()
     local remaining, used, total = file.fsinfo()
     print("\nFile system info")
-    print("Total:\t"..total.." bytes")
-    print("Used:\t"..used.." bytes")
+    print("Total:\t\t"..total.." bytes")
+    print("Used:\t\t"..used.." bytes")
     print("Remaining:\t"..remaining.." bytes")
 
     print("\nFile list:")
@@ -49,39 +60,15 @@ local function netInfo()
         m)
     )
     print("MAC:\t"..wifi.sta.getmac())
-end
 
-local function fireUpWLAN()
-    local _retries = 0
-    return function(timer)
-        local ip, netmask, gateway = wifi.sta.getip()
-        if (ip) then
-            print("Network connection:")
-            print("IP:\t"..ip)
-            print("Netmask:\t"..netmask)
-            print("Gateway:\t"..gateway)
-            
-            -- register http handler
-            timer:unregister()
-
-            --signal normal operation
-            blinker:interval(2000)
-        elseif wifi.getmode() == wifi.STATION then
-            if (_retries == 0) then
-                print("Connecting to WLAN '"..wifi.sta.getconfig().."' ...")
-            elseif (_retries > 9) then
-                print("giving up connectiong to WLAN '"..wifi.sta.getconfig().."'")
-                wifi.setmode(wifi.SOFTAP)
-                print("Setting up default WLAN '"..wifi.ap.getconfig().."'")                
-            else
-                print("... waiting for connection")
-            end
-            _retries = _retries+1
-        else
-            print("still no IP. Giving up finally.")
-            timer:unregister()
-        end
+    local x=wifi.sta.getapinfo()
+    local y=wifi.sta.getapindex()
+    print("\nAPs stored in flash:", x.qty)
+    print(string.format("  %-2s %-16s %-32s %-18s", "", "SSID:", "Password:", "BSSID:")) 
+    for i=1, (x.qty), 1 do
+        print(string.format(" %s%-2d %-16s %-32s %-18s",(i==y and ">" or " "), i, x[i].ssid, x[i].pwd and x[i].pwd or type(nil), x[i].bssid and x[i].bssid or type(nil)))
     end
+
 end
 
 local function ledBlink()
@@ -98,5 +85,3 @@ print("Welcome to GeBräu HERMS-I")
 nodeInfo()
 fsInfo()
 netInfo()
-
--- wifiStarter:alarm(1000, tmr.ALARM_AUTO, fireUpWLAN())
