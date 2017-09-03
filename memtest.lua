@@ -1,5 +1,5 @@
 function logMem(msg)
-    print(msg, 'heap:lua', string.format('%5d:%2d000 bytes', node.heap(), collectgarbage('count')))
+    print(msg, 'heap:lua', string.format('%5d:%5d bytes', node.heap(), collectgarbage('count')*1024))
 end
 
 function floodMem()
