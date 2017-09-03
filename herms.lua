@@ -1,23 +1,33 @@
-owPin=3
+-- configure gpio
+local ledPin=4
+gpio.mode(ledPin,gpio.OUTPUT)
+
+-- configure 1-wire
+local owPin=3
 ow.setup(owPin)
 
-addrSwitch_hlt = encoder.fromHex("3af80721000000e2")
-addrT_mt = encoder.fromHex("28ee6db6161601c2")
-addrT_coil = encoder.fromHex("28f4f06908000030")
-addrT_hlt = encoder.fromHex("28eea2b916160115")
+local addrSwitch_hlt = encoder.fromHex("3af80721000000e2")
+local addrT_mt = encoder.fromHex("28ee6db6161601c2")
+local addrT_coil = encoder.fromHex("28f4f06908000030")
+local addrT_hlt = encoder.fromHex("28eea2b916160115")
 
-hltTimer = tmr.create()
+local hltTimer = tmr.create()
 
-setValue_hlt = 0.0
-hlt_power = 0
+local setValue_hlt = 0.0
+local hlt_power = 0
 
-calibration = {
+local calibration = {
     [addrT_coil] = {t0 = 1.57; t98_6 = 97.3};
     [addrT_hlt] = {t0 = -0.1; t98_6 = 98.6};
     [addrT_mt] = {t0 = -0.1; t98_6 = 98.6}
 }
 
-function scanOWDevices()
+-- LED control
+local function led(state)
+    gpio.write(ledPin, state)
+end
+
+local function scanOWDevices()
     print("Scanning for 1-wire devices:")
     ow.reset_search(owPin)
 
@@ -44,7 +54,7 @@ end
 -- DS2413 datasheet: https://datasheets.maximintegrated.com/en/ds/DS2413.pdf
 -- 1-Wire command codes: https://owfs.sourceforge.net/family.html
 -- Example C-code: https://codeload.github.com/adafruit/Adafruit_DS2413/zip/master
-function ssr(ssrA, ssrB)
+local function ssr(ssrA, ssrB)
     local value = 2*(ssrB and 0 or 1) + (ssrA and 0 or 1)
     ow.reset(owPin)
     ow.select(owPin, addrSwitch_hlt)  -- select the sensor
@@ -60,7 +70,7 @@ function ssr(ssrA, ssrB)
     ow.reset(owPin);
 end
 
-function heater(power)
+local function heater(power)
     if (power < 0 or power > 3) then
         print('power value out of bounds 0 .. 3')
         return
@@ -80,7 +90,7 @@ function heater(power)
     ow.reset(owPin);
 end
 
-function startTempConversion(addr)
+local function startTempConversion(addr)
     ow.reset(owPin)
     if addr then                    -- read a specific sensor
         ow.select(owPin, addr)      -- select the sensor
@@ -90,7 +100,7 @@ function startTempConversion(addr)
     ow.write(owPin, 0x44)           -- issue A/D conversion command
 end
 
-function readTemp(addr)
+local function readTemp(addr)
     -- read out ds18b20
     ow.reset(owPin)
     ow.select(owPin, addr)          -- select the  sensor
@@ -105,35 +115,7 @@ function readTemp(addr)
  --   return t                                      -- raw temperature value
 end
 
-function hltTemp()
-    startTempConversion(addrT_hlt)    
-    led(0)                          -- LED on
-    -- after 750m read out the temperature
-    tmr.create():alarm(750, tmr.ALARM_SINGLE, function()
-        print("HLT set:"..setValue_hlt, "actual:"..readTemp(addrT_hlt))
-        led(1)                      -- LED off
-    end)
-end
-
-function allTemps()
-    local count=0                       -- closure local variable
-
-    return function()
-        startTempConversion()    
-        led(0)                          -- LED on
-        -- after 750ms read out the temperatures
-        tmr.create():alarm(750, tmr.ALARM_SINGLE, function()
-            print(count, string.format(
-                'HLT: %.1f°C\tCoil: %.1f°C\tMT: %.1f°C', 
-                readTemp(addrT_hlt), readTemp(addrT_coil), readTemp(addrT_mt))
-            )
-            count = count+1
-            led(1)                      -- LED off
-        end)
-    end
-end
-
-function hltControll()
+local function hltControll()
     local count=0.0                       -- closure local variable
 
     return function()
@@ -171,12 +153,25 @@ function hltControll()
     end
 end
 
-function hlt(setValue)
+local function setHltTemp(setValue)
     setValue_hlt = setValue
 end
 
-blinker:stop()  -- stop LED blinking
+local function readAllTemps()
+    return {
+        hlt = readTemp(addrT_hlt),
+        set = setValue_hlt,
+        coil = readTemp(addrT_coil),
+        mt = readTemp(addrT_mt)
+    }
+end
+
 led(1)          -- switch off LED
 scanOWDevices()
 heater(0)       -- switch off HLT heating element
 hltTimer:alarm(6000, tmr.ALARM_AUTO, hltControll())
+
+return {
+    setHltTemp = setHltTemp,
+    readAllTemps = readAllTemps
+}
