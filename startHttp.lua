@@ -1,45 +1,75 @@
-local function response(socket, title, body)
-    socket:send("HTTP/1.1 200 OK\n\n")
-    socket:send("<!DOCTYPE HTML>\n")
-    socket:send("<html>\n")
-    socket:send("<head>\n")
-    socket:send('\t<meta content="text/html; charset=utf-8"/>\n')
-    socket:send('\t<title>')
-    socket:send(title)
-    socket:send('</title>\n')
-    socket:send("<body>\n")
-    socket:send(body)
-    socket:send("</body>\n")
-    socket:send("</html>")
+local herms = require 'herms'
+
+local restResponseHeader = [[
+HTTP/1.1 200 OK
+Server: NodeMCU
+Content-Type: application/json
+Content-Length: %d
+
+]]
+
+local restRepsonseBody = [[
+{
+	"set": %.1f,
+	"hlt": %.1f,
+	"coil": %.1f,
+	"mt": %.1f,
+	"heap": %d,
+	"memUsed": %d
+}
+]]
+
+local response404 = [[
+HTTP/1.0 404 Not Found
+Content-Length: 0
+
+]]
+
+local function closeSocket(socket)
+    socket:close()
 end
 
-local function welcome()
-    return [[
-        <h1>Welcome to GeBr&auml;u HERMS-I</h1>
-        <form action="/" method="post">
-            HLT temperature:<br/>
-            <input type="number" name="hlt-temp" >&deg;C <br/>
-            <input type="submit" value="Set" >
-        </form>
-]]
+local function sendHermsResponse(socket)
+	local t = herms.readAllTemps()
+	local body = string.format(
+		restRepsonseBody,
+		t.set, t.hlt, t.coil, t.mt, node.heap(), collectgarbage('count')*1024)
+	local header = string.format(restResponseHeader, #body)
+
+	print("\nsending response:")
+	print(header)
+	print(body)
+	socket:send(header, function (s) s:send(body, closeSocket) end)
 end
 
 -- if a server is running, reset it
 if (not httpserver) then
     httpserver = net.createServer(net.TCP)
-    print("Http server created")
+    print("Server created")
 end
 if (httpserver:getaddr()) then
     httpserver:close()
-    print("Http server closed")
+    print("Server closed")
 end
 
 httpserver:listen(80, function(socket)
-    socket:on("receive", function(s, data)
-        print("httpserver got request:")
-        print(data)
-        response(s, "GeBr&auml;u HERMS-I", welcome())
-    end)
-    socket:on("sent", function(s) s:close() end)
+	socket:on("receive", function(s0, request)
+		print("httpserver got request:")
+		print(request)
+
+		if string.find(request, 'PUT /herms', 1, true) then
+			local setValue = string.match(request, '\r\n\r\n%s*{.-set"?%s*:%s*([%d%.]+)')
+			if setValue then
+				herms.setHltTemp(setValue)
+			else
+				print("PUT didn't get any set value.")
+			end
+			sendHermsResponse(s0)
+		elseif string.find(request, 'GET /herms', 1, true) then
+			sendHermsResponse(s0)
+		else
+			s0:send(response404, closeSocket)
+		end
+	end)
 end)
 print("Http server registered")
