@@ -1,5 +1,5 @@
 -- configure gpio
-local ledPin=4
+local ledPin=0
 gpio.mode(ledPin,gpio.OUTPUT)
 
 -- configure 1-wire
