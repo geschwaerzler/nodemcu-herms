@@ -6,6 +6,9 @@ luac.out
 *.zip
 *.tar.gz
 
+# nodemcu firmware
+nodemcu-*.bin
+
 # Object files
 *.o
 *.os
