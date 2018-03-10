@@ -12,4 +12,4 @@ Upload files to NodeMCU
 
 Connect to NodeMCU
 * connect with simple VT100 emulaton: screen /dev/cu.SLAB_USBtoUART 115200
-* disconnect: ctrl-a, ctrl-/, and "y" for "yes"
+* disconnect: ctrl-a, ctrl-\, and "y" for "yes"

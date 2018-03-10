@@ -1,6 +1,4 @@
--- configure gpio
-local ledPin=0
-gpio.mode(ledPin,gpio.OUTPUT)
+local led = require 'led-module'
 
 -- configure 1-wire
 local owPin=3
@@ -11,8 +9,6 @@ local addrT_mt = encoder.fromHex("28ee6db6161601c2")
 local addrT_coil = encoder.fromHex("28f4f06908000030")
 local addrT_hlt = encoder.fromHex("28eea2b916160115")
 
-local hltTimer = tmr.create()
-
 local setValue_hlt = 0.0
 local hlt_power = 0
 
@@ -21,11 +17,6 @@ local calibration = {
     [addrT_hlt] = {t0 = -0.1; t98_6 = 98.6};
     [addrT_mt] = {t0 = -0.1; t98_6 = 98.6}
 }
-
--- LED control
-local function led(state)
-    gpio.write(ledPin, state)
-end
 
 local function scanOWDevices()
     print("Scanning for 1-wire devices:")
@@ -61,13 +52,13 @@ local function ssr(ssrA, ssrB)
     ow.write(owPin, 0x5A)         -- write
     ow.write(owPin, value)        -- bit0 = owPina, bit1 = owPinb
     ow.write(owPin, 255 - value)  -- Invert data and resend
-    local ack = ow.read(owPin);   -- 0xAA=success, 0xFF=failure
+    local ack = ow.read(owPin)    -- 0xAA=success, 0xFF=failure
     if (ack == 0xAA) then
         ow.read(owPin)            -- Read the status byte
     else
         print('ds2413 write failed')
     end
-    ow.reset(owPin);
+    ow.reset(owPin)
 end
 
 local function heater(power)
@@ -80,14 +71,14 @@ local function heater(power)
     ow.write(owPin, 0x5A)         -- write switch states
     ow.write(owPin, 255 - power)  -- bit0 = owPin_a, bit1 = owPin_b, 0=on, 1=off
     ow.write(owPin, power)        -- Invert data and resend
-    local ack = ow.read(owPin);   -- 0xAA=success, 0xFF=failure
+    local ack = ow.read(owPin)    -- 0xAA=success, 0xFF=failure
     if (ack == 0xAA) then
         ow.read(owPin)            -- Read the status byte
         hlt_power = power
     else
         print('ds2413 write failed')
     end
-    ow.reset(owPin);
+    ow.reset(owPin)
 end
 
 local function startTempConversion(addr)
@@ -120,7 +111,7 @@ local function hltControll()
 
     return function()
         startTempConversion()    
-        led(0)                          -- LED on
+        led.blink(1, 50)
         -- after 750ms read out the temperatures
         tmr.create():alarm(750, tmr.ALARM_SINGLE, function()
             local actual_hlt = readTemp(addrT_hlt)
@@ -142,13 +133,13 @@ local function hltControll()
                 heater(0)
             end
 
-            print(string.format(
-                '%.1f\tset: %.1f°C\tHLT: %.1f°C\tCoil: %.1f°C (%.1f)\tpower: %d\tMT: %.1f°C', 
-                count, setValue_hlt, actual_hlt, actual_coil, actual_coil-actual_hlt, hlt_power, readTemp(addrT_mt)
-            ))
+            -- print(string.format(
+            --     '%.1f\tset: %.1f°C\tHLT: %.1f°C\tCoil: %.1f°C (%.1f)\tpower: %d\tMT: %.1f°C', 
+            --     count, setValue_hlt, actual_hlt, actual_coil, actual_coil-actual_hlt, hlt_power, readTemp(addrT_mt)
+            -- ))
             count = count + 0.1
 
-            led(1)                      -- LED off
+            led.stop(1)
         end)
     end
 end
@@ -166,9 +157,10 @@ local function readAllTemps()
     }
 end
 
-led(1)          -- switch off LED
 scanOWDevices()
 heater(0)       -- switch off HLT heating element
+
+local hltTimer = tmr.create()
 hltTimer:alarm(6000, tmr.ALARM_AUTO, hltControll())
 
 return {
