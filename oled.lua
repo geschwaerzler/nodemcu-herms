@@ -30,12 +30,12 @@ local newcentury14b = u8g.font_ncenB14r
 local nextDrawFunc = nil            -- next screen to be drawn
 local drawQueueEmpty = true
 
-function initDisplay(sda, scl, sla) -- Set up the u8glib lib
+local function initDisplay(sda, scl, sla) -- Set up the u8glib lib
     i2c.setup(0, sda, scl, i2c.SLOW)
     disp = u8g.sh1106_128x64_i2c(sla)
 end
 
-function display(func)
+local function display(func)
     local startTime
     local drawPage
 
@@ -71,12 +71,48 @@ function display(func)
     end
 end
 
-function centerStr(x, w, str)
+local function centerStr(x, w, str)
     local strW = disp:getStrWidth(str)
     return math.floor(x + (w-strW)/2), strW
 end
 
-function drawCenteredStr(x, y, w, str)
+local function drawCenteredStr(x, y, w, str)
+    x, w = centerStr(x, w, str)
+    disp:drawStr(x, y, str)
+end
+
+local function drawCenteredIStr(x, y, w, str)
+    local h = disp:getFontAscent()-1
+    disp:drawBox(x, y-h-2, w, h+2)
+    x = centerStr(x, w, str)
+    disp:setDefaultBackgroundColor()
+    disp:drawStr(x, y-1, str)
+    disp:setDefaultForegroundColor()
+end
+
+local function drawMTScale(dt)
+    for y = -18,36,2 do
+        if y == 0 then
+            disp:drawHLine(92, 44, 5)
+        elseif math.floor(y/20) == y/20 then
+            disp:drawHLine(92, 44 - y, 4)
+        elseif math.floor(y/10) == y/10 then
+            disp:drawHLine(93, 44 - y, 2)
+        else
+            disp:drawPixel(93, 44 - y)
+        end
+    end
+    dt = math.floor(dt / 0.05 + 0.5)
+    if dt > 0 then
+        disp:drawBox(90, 44-dt, 2, dt+1)
+    elseif dt < 0 then
+        disp:drawBox(90, 44, 2, 1-dt)
+    else
+        disp:drawHLine(88,44,4)
+    end
+end
+
+local function drawCenteredStrWithBackgroud(x, y, w, str)
     x, w = centerStr(x, w, str)
     local h = disp:getFontAscent()
     disp:setDefaultBackgroundColor()
@@ -85,7 +121,7 @@ function drawCenteredStr(x, y, w, str)
     disp:drawStr(x, y, str)
 end
 
-function drawCenteredTemp(x, y, w, temp, fontInt, fontFract)
+local function drawCenteredTemp(x, y, w, temp, fontInt, fontFract)
     local intStr = string.format('%d', temp)
     local fract = math.abs(temp)
     fract = fract - math.floor(fract)
@@ -101,22 +137,22 @@ function drawCenteredTemp(x, y, w, temp, fontInt, fontFract)
     disp:drawStr(x, y, fractStr)
 end
 
-function drawPanel(x, y, w, h, title, font)
+local function drawPanel(x, y, w, h, title, font)
     disp:setFont(u8g.font_chikita)
     local ascent = disp:getFontAscent()
     local mid = math.floor(ascent/2)
     disp:drawFrame(x, y+mid, w, h-mid)
-    drawCenteredStr(x, y+ascent, w, title)
+    drawCenteredStrWithBackgroud(x, y+ascent, w, title)
     return (ascent + h) / 2 -- returns dy of the middle
 end
 
-function drawTemp(x, y, title, temp)
+local function drawTemp(x, y, title, temp)
     local dy = drawPanel(x, y, 31, 31, title, u8g.font_chikita)
     dy = math.ceil(dy + disp:getFontAscent()/2)
     drawCenteredTemp(x, y+dy, 31, temp, newcentury10b, newcentury8)
 end
 
-function drawMT(x, y, r, t, dt)
+local function drawMT(x, y, r, t, dt)
     -- circular scale
     disp:drawCircle(x+r, y, r-2, u8g.DRAW_UPPER_LEFT)
     disp:drawDisc(x+r, y, r-2, u8g.DRAW_UPPER_RIGHT)
@@ -156,7 +192,7 @@ function drawMT(x, y, r, t, dt)
     drawCenteredTemp(x, y, 2*r, t, newcentury14b, newcentury10)
 end
 
-function drawMem(x, y, used, free)
+local function drawMem(x, y, used, free)
     local blockW = 16
     local blockCount = 128 / blockW
 
@@ -178,7 +214,7 @@ function drawMem(x, y, used, free)
     disp:setDefaultForegroundColor()
 end
 
-function drawHermsState(hltSet, hltActual, coil)
+local function drawHermsState(hltSet, hltActual, coil)
     local memUsed = collectgarbage('count')*1024
     local memFree = node.heap()
     return function ()
@@ -190,21 +226,53 @@ function drawHermsState(hltSet, hltActual, coil)
     end
 end
 
+local function drawHerms(state)
+    local memUsed = collectgarbage('count')*1024
+    local memFree = node.heap()
+    return function ()
+        -- dividers
+        disp:drawHLine(0,35,31)
+        disp:drawHLine(97,26,31)
+        disp:drawHLine(97,45,31)
+        
+        -- labels
+        disp:setFont(u8g.font_chikita)
+        drawCenteredStr(0, 34, 30, 'HLT')
+        drawCenteredStr(0, 42, 30, 'HX')
+        drawCenteredStr(98, 25, 30, 'heater')
+        drawCenteredStr(98, 52, 30, 'display')
+        drawCenteredStr(32, 14, 64, 'MT')
+
+        -- values
+        drawCenteredTemp(0, 27, 28, state.hlt, newcentury10b, newcentury8)
+        drawCenteredTemp(0, 56, 28, state.coil, newcentury10b, newcentury8)
+        drawCenteredTemp(32, 42, 64, state.mt, newcentury14b, newcentury10b)
+
+        -- values inverse
+        disp:setFont(u8g.font_chikita)        
+        drawCenteredIStr(0, 14, 28, string.format('%.1f', state.hltSet))
+        drawCenteredIStr(0, 64, 28, '20 l/m')
+
+        -- scales
+        drawMTScale(hltSet / 10)
+    end
+end
+
 initDisplay(sda, scl, sla)
 
 rotary.setup(rotChannel, rotA, rotB, rotPress)
 -- rotary.on(rotChannel, rotary.ALL, onAll)
 rotary.on(rotChannel, rotary.TURN, function (type, pos, time)
     hltSet = pos / 8
-    display(drawHermsState(hltSet, hltActual, coil))
+    display(drawHerms({hltSet = hltSet, hlt = hltActual, coil = coil, mt = 62.4}))
 end)
 rotary.on(rotChannel, rotary.PRESS, function (type, pos, time)
     hltSet = pos / 8
     hltActual = hltSet
-    display(drawHermsState(hltSet, hltActual, coil))
+    display(drawHerms({hltSet = hltSet, hlt = hltActual, coil = coil, mt = 62.4}))
 end)
 
-display(drawHermsState(hltSet, hltActual, coil))
+display(drawHerms({hltSet = hltSet, hlt = hltActual, coil = coil, mt = 62.4}))
 
 -- local oledTimer = tmr.create()
 -- oledTimer:alarm(2000, tmr.ALARM_AUTO, function ()
