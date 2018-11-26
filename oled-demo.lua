@@ -1,6 +1,6 @@
 -- I2C interface to display
-local sda = 1 -- SDA Pin
-local scl = 2 -- SCL Pin
+local sda = 7 -- SDA Pin
+local scl = 6 -- SCL Pin
 local sla = 0x3C
 
 -- rotary push button interface
@@ -112,13 +112,21 @@ local function drawMTScale(dt)
     end
 end
 
-local function drawCenteredStrWithBackgroud(x, y, w, str)
-    x, w = centerStr(x, w, str)
-    local h = disp:getFontAscent()
-    disp:setDefaultBackgroundColor()
-    disp:drawBox(x-1, y-h-1, w+2, h+2)
-    disp:setDefaultForegroundColor()
-    disp:drawStr(x, y, str)
+local function drawSmallScale(x, y, dt)
+    disp:drawHLine(x, y, 2)
+    for dy = 2, 24, 2 do
+        if math.floor(dy/10) == dy/10 then
+            disp:drawHLine(x, y - dy, 2)
+        else
+            disp:drawPixel(x+1, y - dy)
+        end
+    end
+    dt = math.floor(dt / 0.10 + 0.5)
+    if dt > 0 then
+        disp:drawVLine(x+2, y-dt+1, dt)
+    elseif dt == 0 then
+        disp:drawHLine(x+2,y,2)
+    end
 end
 
 local function drawCenteredTemp(x, y, w, temp, fontInt, fontFract)
@@ -135,61 +143,6 @@ local function drawCenteredTemp(x, y, w, temp, fontInt, fontFract)
     x = x + disp:drawStr(x, y, intStr)    
     disp:setFont(fontFract)
     disp:drawStr(x, y, fractStr)
-end
-
-local function drawPanel(x, y, w, h, title, font)
-    disp:setFont(u8g.font_chikita)
-    local ascent = disp:getFontAscent()
-    local mid = math.floor(ascent/2)
-    disp:drawFrame(x, y+mid, w, h-mid)
-    drawCenteredStrWithBackgroud(x, y+ascent, w, title)
-    return (ascent + h) / 2 -- returns dy of the middle
-end
-
-local function drawTemp(x, y, title, temp)
-    local dy = drawPanel(x, y, 31, 31, title, u8g.font_chikita)
-    dy = math.ceil(dy + disp:getFontAscent()/2)
-    drawCenteredTemp(x, y+dy, 31, temp, newcentury10b, newcentury8)
-end
-
-local function drawMT(x, y, r, t, dt)
-    -- circular scale
-    disp:drawCircle(x+r, y, r-2, u8g.DRAW_UPPER_LEFT)
-    disp:drawDisc(x+r, y, r-2, u8g.DRAW_UPPER_RIGHT)
-    disp:setDefaultBackgroundColor()
-    disp:drawDisc(x+r, y, r-4, u8g.DRAW_UPPER_RIGHT)
-    disp:setDefaultForegroundColor()
-
-    -- scale ticks
-    dx45 = math.floor(r / 1.4142 + 0.5)   -- x an y of a 45 degree triangle
-    disp:drawHLine(x, y, 5)
-    disp:drawHLine(x+2*r-4, y, 5)
-    disp:drawVLine(x+r, y-r, 5)
-    disp:drawLine(x+r-dx45+4, y-dx45+4, x+r-dx45, y-dx45)
-    disp:drawLine(x+r+dx45-4, y-dx45+4, x+r+dx45, y-dx45)
-
-    -- draw dt needle
-    if dt < -2.0 then
-        dt = - 2.0
-    elseif dt > 2.0 then
-        dt = 2.0
-    end
-    local angle = math.pi * dt / 4
-    local angleSqr = angle * angle
-    local angleBy3 = angleSqr*angle
-    local angleBy4 = angleSqr*angleSqr
-    local sin = angle - angleBy3/6 + angleBy3*angleSqr/120 - angleBy4*angleBy3/5040
-    local cos = 1 - angleSqr/2 + angleBy4/24 - angleBy3*angleBy3/720
-    
-    local dx, dy = math.floor(sin*r + 0.5), math.floor(cos*r + 0.5)
-    disp:drawLine(x+r, y, x+r+dx, y-dy)
-    disp:setDefaultBackgroundColor()
-    disp:drawDisc(x+r, y, r-12, u8g.DRAW_UPPER_LEFT)
-    disp:drawDisc(x+r, y, r-12, u8g.DRAW_UPPER_RIGHT)
-    disp:setDefaultForegroundColor()
-
-    -- draw temp value
-    drawCenteredTemp(x, y, 2*r, t, newcentury14b, newcentury10)
 end
 
 local function drawMem(x, y, used, free)
@@ -212,18 +165,6 @@ local function drawMem(x, y, used, free)
     local blockStr = string.format('%01dK', total/1024/blockCount)
     disp:drawStr(centerStr(x,blockW,blockStr), y, blockStr)
     disp:setDefaultForegroundColor()
-end
-
-local function drawHermsState(hltSet, hltActual, coil)
-    local memUsed = collectgarbage('count')*1024
-    local memFree = node.heap()
-    return function ()
-        drawTemp(0, 0, 'HLT', hltActual)
-        drawTemp(96, 0, 'Coil', coil)
---        drawTemp(32, 0, 'set', hltSet)
-        drawMT(24, 54, 40, 45.32, hltSet/10)
-        drawMem(0, 64, memUsed, memFree)
-    end
 end
 
 local function drawHerms(state)
@@ -255,6 +196,8 @@ local function drawHerms(state)
 
         -- scales
         drawMTScale(hltSet / 10)
+        drawSmallScale(28, 33, 1.1)
+        drawSmallScale(28, 63, 0)
     end
 end
 
@@ -274,7 +217,7 @@ end)
 
 display(drawHerms({hltSet = hltSet, hlt = hltActual, coil = coil, mt = 62.4}))
 
--- local oledTimer = tmr.create()
--- oledTimer:alarm(2000, tmr.ALARM_AUTO, function ()
---     display(drawHermsState)
--- end)
+local oledTimer = tmr.create()
+oledTimer:alarm(2000, tmr.ALARM_AUTO, function ()
+    display(drawHermsState)
+end)

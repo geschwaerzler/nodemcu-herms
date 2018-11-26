@@ -1,9 +1,19 @@
 local led = require 'led-module'
+local sh1106 = require 'sh1106'
 
 -- configure 1-wire
-local owPin=3
+local owPin=5
 ow.setup(owPin)
 
+-- configure rotary push button interface
+local rotA = 2
+local rotB = 3
+local rotPress = 4
+local rotChannel = 0
+
+-- SSR 1-wire modules:
+-- 3af80721000000e2
+-- 3A4DC82A000000D7
 local addrSwitch_hlt = encoder.fromHex("3af80721000000e2")
 local addrT_mt = encoder.fromHex("28ee6db6161601c2")
 local addrT_coil = encoder.fromHex("28f4f06908000030")
@@ -17,6 +27,29 @@ local calibration = {
     [addrT_hlt] = {t0 = -0.1; t98_6 = 98.6};
     [addrT_mt] = {t0 = -0.1; t98_6 = 98.6}
 }
+
+-- draw functions
+local function drawSetValue(setValue)
+    return function (disp)
+        disp:setFont(sh1106.bold)
+        disp:drawStr(0, 12,string.format('HLT set: %.1f', setValue))
+    end
+end
+
+local function drawHerms(state)
+    local memUsed = collectgarbage('count')*1024
+    local memFree = node.heap()
+    return function (disp)
+        disp:setFont(sh1106.plain)
+        disp:drawStr(0, 12, string.format('HLT: %.1f/%.1f', state.hlt, state.hlt_set))
+        disp:drawStr(0, 24, string.format('MT: %.1f', state.mt))
+        disp:drawStr(0, 36, string.format('Coil: %.1f', state.coil))
+        disp:drawStr(0, 48, string.format('Heater: %1d', state.power))
+        disp:setFont(sh1106.mini)
+        disp:drawStr(0, 60, string.format('MEM: %1d/%1d', memFree, memFree+memUsed))
+    end
+end
+
 
 local function scanOWDevices()
     print("Scanning for 1-wire devices:")
@@ -133,6 +166,14 @@ local function hltControll()
                 heater(0)
             end
 
+            sh1106.display(drawHerms {
+                hlt = actual_hlt,
+                hlt_set = setValue_hlt,
+                coil = actual_coil,
+                mt = readTemp(addrT_mt),
+                power = hlt_power
+            })
+
             -- print(string.format(
             --     '%.1f\tset: %.1f°C\tHLT: %.1f°C\tCoil: %.1f°C (%.1f)\tpower: %d\tMT: %.1f°C', 
             --     count, setValue_hlt, actual_hlt, actual_coil, actual_coil-actual_hlt, hlt_power, readTemp(addrT_mt)
@@ -145,6 +186,7 @@ local function hltControll()
 end
 
 local function setHltTemp(setValue)
+    print('setHltTemp to:', setValue)
     setValue_hlt = setValue
 end
 
@@ -163,7 +205,15 @@ heater(0)       -- switch off HLT heating element
 local hltTimer = tmr.create()
 hltTimer:alarm(6000, tmr.ALARM_AUTO, hltControll())
 
+rotary.setup(rotChannel, rotA, rotB, rotPress)
+rotary.on(rotChannel, rotary.TURN, function (type, pos, time)
+    setHltTemp( pos / 8 )
+    sh1106.display(drawSetValue(setValue_hlt))
+end)
+
 return {
     setHltTemp = setHltTemp,
-    readAllTemps = readAllTemps
+    readAllTemps = readAllTemps,
+    scanOWDevices = scanOWDevices,
+    heater = heater
 }

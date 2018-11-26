@@ -1,11 +1,12 @@
 -- NodeMCUs pins, that are connected to LEDs
-local ledPin = {0, 4}
+-- local ledPin = {0, 4}
+local ledPin = {0}
 gpio.mode(ledPin[1], gpio.OUTPUT)
-gpio.mode(ledPin[2], gpio.OUTPUT)
+-- gpio.mode(ledPin[2], gpio.OUTPUT)
 
 -- register timers
 local timer = {
-    tmr.create(),
+--    tmr.create(),
     tmr.create()
 }
 
