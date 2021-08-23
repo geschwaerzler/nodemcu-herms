@@ -95,8 +95,8 @@ local function ssr(ssrA, ssrB)
 end
 
 local function heater(power)
-    if (power < 0 or power > 3) then
-        print('power value out of bounds 0 .. 3')
+    if (power < 0 or power > 2) then
+        print('power value out of bounds 0 .. 2')
         return
     end
     ow.reset(owPin)
@@ -152,9 +152,7 @@ local function hltControll()
 
             -- controll the heating element
             local delta = setValue_hlt - actual_hlt
-            if delta > 2.0 then
-                heater(3)
-            elseif delta > 1.0 then
+            if delta > 1.0 then
                 heater(2)
             elseif delta > 0.5 then
                 heater(1)
