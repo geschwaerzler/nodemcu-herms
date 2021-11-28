@@ -1,4 +1,4 @@
-print("Welcome to GeBräu HERMS-I")
+print("Welcome to GeBräu HLT-I")
 
 local led = require 'led-module'
 led.blink(1, 100)
@@ -38,5 +38,5 @@ sh1106.display(function(disp)
     disp:drawStr(0, 12, "Welcome to")
     disp:drawStr(0, 24, "GeBraeu")
     disp:setFont(sh1106.bold)
-    disp:drawStr(0, 36, "HERMS-I")
+    disp:drawStr(0, 36, "HLT-I")
 end)

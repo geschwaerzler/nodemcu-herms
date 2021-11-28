@@ -3,7 +3,7 @@ HERMS brewing controller running on NodeMCU
 
 Installation notes for Mac OS Sierra
 
-* Serial USB driver: https://www.silabs.com/products/development-tools/software/usb-to-uart-bridge-vcp-drivers
+* Serial USB driver (needed on mbp17ge with USB-A/B): https://www.silabs.com/products/development-tools/software/usb-to-uart-bridge-vcp-drivers
 * pyserial: sudo easy_install pyserial
 * nodemcu_uploader: sudo easy_install nodemcu-uploader
 
@@ -11,7 +11,11 @@ Upload files to NodeMCU
 * nodemcu-uploader upload herms.lua
 
 Connect to NodeMCU
-* connect with simple VT100 emulaton: screen /dev/cu.SLAB_USBtoUART 115200
+* connect with simple VT100 emulaton:
+    * at mbp17ge
+    > screen /dev/cu.SLAB_USBtoUART 115200
+    * or at mbp13ge
+    > screen /dev/cu.usbserial-0001 115200
 * disconnect: ctrl-a, ctrl-\, and "y" for "yes"
 
 When connected to the LUA interpreter:
